@@ -40,9 +40,7 @@ public enum DefaultGlueType
     SMALLINT("smallint", Types.MinorType.SMALLINT.getType()),
     TINYINT("tinyint", Types.MinorType.TINYINT.getType()),
     BIT("boolean", Types.MinorType.BIT.getType()),
-    VARBINARY("binary", Types.MinorType.VARBINARY.getType()),
-    TIMESTAMP("timestamp", Types.MinorType.DATEMILLI.getType()),
-    DATE("date", Types.MinorType.DATEDAY.getType());
+    VARBINARY("binary", Types.MinorType.VARBINARY.getType());
 
     private static final Map<String, DefaultGlueType> TYPE_MAP = new HashMap<>();
 

@@ -24,6 +24,8 @@ import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.Field;
 import org.bson.Document;
 
+import java.util.List;
+
 /**
  * Used to resolve DocDB complex structures to Apache Arrow Types.
  *
@@ -41,7 +43,7 @@ public class DocDBFieldResolver
     {
         Types.MinorType minorType = Types.getMinorTypeForArrowType(field.getType());
         if (minorType == Types.MinorType.LIST) {
-            return TypeUtils.coerce(field, ((Document) value).get(field.getName()));
+            return TypeUtils.coerce(field.getChildren().get(0), ((List) value).iterator());
         }
         else if (value instanceof Document) {
             Object rawVal = ((Document) value).get(field.getName());

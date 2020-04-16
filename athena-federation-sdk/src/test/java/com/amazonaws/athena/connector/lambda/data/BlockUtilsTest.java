@@ -20,6 +20,8 @@ package com.amazonaws.athena.connector.lambda.data;
  * #L%
  */
 
+import org.apache.arrow.vector.complex.reader.FieldReader;
+import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.junit.After;
@@ -27,7 +29,12 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 
+import static com.amazonaws.athena.connector.lambda.data.BlockUtils.UTC_ZONE_ID;
 import static org.junit.Assert.*;
 
 public class BlockUtilsTest

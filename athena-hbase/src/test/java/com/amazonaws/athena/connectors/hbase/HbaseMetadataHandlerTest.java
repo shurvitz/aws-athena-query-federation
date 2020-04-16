@@ -38,6 +38,7 @@ import com.amazonaws.athena.connector.lambda.metadata.ListTablesRequest;
 import com.amazonaws.athena.connector.lambda.metadata.ListTablesResponse;
 import com.amazonaws.athena.connector.lambda.metadata.MetadataRequestType;
 import com.amazonaws.athena.connector.lambda.metadata.MetadataResponse;
+import com.amazonaws.athena.connector.lambda.security.FederatedIdentity;
 import com.amazonaws.athena.connector.lambda.security.LocalKeyFactory;
 import com.amazonaws.athena.connectors.hbase.connection.HBaseConnection;
 import com.amazonaws.athena.connectors.hbase.connection.HbaseConnectionFactory;
@@ -49,18 +50,20 @@ import org.apache.arrow.vector.types.Types;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.hadoop.hbase.HRegionInfo;
 import org.apache.hadoop.hbase.NamespaceDescriptor;
+import org.apache.hadoop.hbase.client.Admin;
+import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.Scan;
+import org.apache.hadoop.hbase.client.Table;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.stubbing.Answer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,15 +85,13 @@ import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
 public class HbaseMetadataHandlerTest
-        extends TestBase
 {
     private static final Logger logger = LoggerFactory.getLogger(HbaseMetadataHandlerTest.class);
 
+    private FederatedIdentity identity = new FederatedIdentity("id", "principal", "account");
+    private String catalog = "default";
     private HbaseMetadataHandler handler;
     private BlockAllocator allocator;
-
-    @Rule
-    public TestName testName = new TestName();
 
     @Mock
     private HBaseConnection mockClient;
@@ -111,7 +112,6 @@ public class HbaseMetadataHandlerTest
     public void setUp()
             throws Exception
     {
-        logger.info("{}: enter", testName.getMethodName());
         handler = new HbaseMetadataHandler(awsGlue,
                 new LocalKeyFactory(),
                 secretsManager,
@@ -130,20 +130,21 @@ public class HbaseMetadataHandlerTest
             throws Exception
     {
         allocator.close();
-        logger.info("{}: exit ", testName.getMethodName());
     }
 
     @Test
     public void doListSchemaNames()
             throws IOException
     {
+        logger.info("doListSchemaNames: enter");
+
         NamespaceDescriptor[] schemaNames = {NamespaceDescriptor.create("schema1").build(),
                 NamespaceDescriptor.create("schema2").build(),
                 NamespaceDescriptor.create("schema3").build()};
 
         when(mockClient.listNamespaceDescriptors()).thenReturn(schemaNames);
 
-        ListSchemasRequest req = new ListSchemasRequest(IDENTITY, QUERY_ID, DEFAULT_CATALOG);
+        ListSchemasRequest req = new ListSchemasRequest(identity, "queryId", "default");
         ListSchemasResponse res = handler.doListSchemaNames(allocator, req);
 
         logger.info("doListSchemas - {}", res.getSchemas());
@@ -176,7 +177,7 @@ public class HbaseMetadataHandlerTest
         tableNames.add("table3");
 
         when(mockClient.listTableNamesByNamespace(eq(schema))).thenReturn(tables);
-        ListTablesRequest req = new ListTablesRequest(IDENTITY, QUERY_ID, DEFAULT_CATALOG, schema);
+        ListTablesRequest req = new ListTablesRequest(identity, "queryId", "default", schema);
         ListTablesResponse res = handler.doListTables(allocator, req);
         logger.info("doListTables - {}", res.getTables());
 
@@ -185,6 +186,8 @@ public class HbaseMetadataHandlerTest
             assertTrue(tableNames.contains(next.getTableName()));
         }
         assertEquals(tableNames.size(), res.getTables().size());
+
+        logger.info("doListTables - exit");
     }
 
     /**
@@ -194,6 +197,10 @@ public class HbaseMetadataHandlerTest
     public void doGetTable()
             throws Exception
     {
+        logger.info("doGetTable - enter");
+
+        String schema = "schema1";
+        String table = "table1";
         List<Result> results = TestUtils.makeResults();
 
         ResultScanner mockScanner = mock(ResultScanner.class);
@@ -204,7 +211,7 @@ public class HbaseMetadataHandlerTest
             return processor.scan(mockScanner);
         });
 
-        GetTableRequest req = new GetTableRequest(IDENTITY, QUERY_ID, DEFAULT_CATALOG, TABLE_NAME);
+        GetTableRequest req = new GetTableRequest(identity, "queryId", catalog, new TableName(schema, table));
         GetTableResponse res = handler.doGetTable(allocator, req);
         logger.info("doGetTable - {}", res);
 
@@ -213,16 +220,19 @@ public class HbaseMetadataHandlerTest
                 .build();
 
         assertEquals(expectedSchema.getFields().size(), res.getSchema().getFields().size());
+        logger.info("doGetTable - exit");
     }
 
     @Test
     public void doGetTableLayout()
             throws Exception
     {
-        GetTableLayoutRequest req = new GetTableLayoutRequest(IDENTITY,
-                QUERY_ID,
-                DEFAULT_CATALOG,
-                TABLE_NAME,
+        logger.info("doGetTableLayout - enter");
+
+        GetTableLayoutRequest req = new GetTableLayoutRequest(identity,
+                "queryId",
+                "default",
+                new TableName("schema1", "table1"),
                 new Constraints(new HashMap<>()),
                 SchemaBuilder.newBuilder().build(),
                 Collections.EMPTY_SET);
@@ -236,12 +246,16 @@ public class HbaseMetadataHandlerTest
         }
 
         assertTrue(partitions.getRowCount() > 0);
+
+        logger.info("doGetTableLayout: partitions[{}]", partitions.getRowCount());
     }
 
     @Test
     public void doGetSplits()
             throws IOException
     {
+        logger.info("doGetSplits: enter");
+
         List<HRegionInfo> regionServers = new ArrayList<>();
         regionServers.add(TestUtils.makeRegion(1, "schema1", "table1"));
         regionServers.add(TestUtils.makeRegion(2, "schema1", "table1"));
@@ -254,10 +268,10 @@ public class HbaseMetadataHandlerTest
         Block partitions = BlockUtils.newBlock(allocator, "partitionId", Types.MinorType.INT.getType(), 0);
 
         String continuationToken = null;
-        GetSplitsRequest originalReq = new GetSplitsRequest(IDENTITY,
-                QUERY_ID,
-                DEFAULT_CATALOG,
-                TABLE_NAME,
+        GetSplitsRequest originalReq = new GetSplitsRequest(identity,
+                "queryId",
+                "catalog_name",
+                new TableName("schema", "table_name"),
                 partitions,
                 partitionCols,
                 new Constraints(new HashMap<>()),
@@ -278,5 +292,7 @@ public class HbaseMetadataHandlerTest
 
         assertTrue("Continuation criteria violated", response.getSplits().size() == 4);
         assertTrue("Continuation criteria violated", response.getContinuationToken() == null);
+
+        logger.info("doGetSplits: exit");
     }
 }

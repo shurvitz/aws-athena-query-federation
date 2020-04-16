@@ -28,6 +28,7 @@ import com.amazonaws.athena.connector.lambda.domain.Split;
 import com.amazonaws.athena.connector.lambda.domain.TableName;
 import com.amazonaws.athena.connector.lambda.domain.predicate.Constraints;
 import com.amazonaws.athena.connector.lambda.domain.spill.S3SpillLocation;
+import com.amazonaws.athena.connector.lambda.examples.ExampleMetadataHandlerTest;
 import com.amazonaws.athena.connector.lambda.metadata.GetSplitsRequest;
 import com.amazonaws.athena.connector.lambda.metadata.GetSplitsResponse;
 import com.amazonaws.athena.connector.lambda.metadata.GetTableLayoutRequest;
@@ -51,9 +52,7 @@ import org.apache.arrow.vector.types.pojo.ArrowType;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,7 +69,7 @@ import static org.mockito.Mockito.when;
 
 public class CompositeHandlerTest
 {
-    private static final Logger logger = LoggerFactory.getLogger(CompositeHandlerTest.class);
+    private static final Logger logger = LoggerFactory.getLogger(ExampleMetadataHandlerTest.class);
 
     private MetadataHandler mockMetadataHandler;
     private RecordHandler mockRecordHandler;
@@ -79,15 +78,10 @@ public class CompositeHandlerTest
     private ObjectMapper objectMapper;
     private Schema schemaForRead;
 
-    @Rule
-    public TestName testName = new TestName();
-
     @Before
     public void setUp()
             throws Exception
     {
-        logger.info("{}: enter", testName.getMethodName());
-
         allocator = new BlockAllocatorImpl();
         objectMapper = ObjectMapperFactory.create(allocator);
         mockMetadataHandler = mock(MetadataHandler.class);
@@ -131,13 +125,13 @@ public class CompositeHandlerTest
     public void after()
     {
         allocator.close();
-        logger.info("{}: exit ", testName.getMethodName());
     }
 
     @Test
     public void doReadRecords()
             throws Exception
     {
+        logger.info("doReadRecords - enter");
         ReadRecordsRequest req = new ReadRecordsRequest(IdentityUtil.fakeIdentity(),
                 "catalog",
                 "queryId-" + System.currentTimeMillis(),
@@ -157,66 +151,79 @@ public class CompositeHandlerTest
         compositeHandler.handleRequest(allocator, req, new ByteArrayOutputStream(), objectMapper);
         verify(mockRecordHandler, times(1))
                 .doReadRecords(any(BlockAllocator.class), any(ReadRecordsRequest.class));
+        logger.info("readRecords - exit");
     }
 
     @Test
     public void doListSchemaNames()
             throws Exception
     {
+        logger.info("doListSchemas - enter");
         ListSchemasRequest req = mock(ListSchemasRequest.class);
         when(req.getRequestType()).thenReturn(MetadataRequestType.LIST_SCHEMAS);
         compositeHandler.handleRequest(allocator, req, new ByteArrayOutputStream(), objectMapper);
         verify(mockMetadataHandler, times(1)).doListSchemaNames(any(BlockAllocatorImpl.class), any(ListSchemasRequest.class));
+        logger.info("doListSchemas - exit");
     }
 
     @Test
     public void doListTables()
             throws Exception
     {
+        logger.info("doListTables - enter");
         ListTablesRequest req = mock(ListTablesRequest.class);
         when(req.getRequestType()).thenReturn(MetadataRequestType.LIST_TABLES);
         compositeHandler.handleRequest(allocator, req, new ByteArrayOutputStream(), objectMapper);
         verify(mockMetadataHandler, times(1)).doListTables(any(BlockAllocatorImpl.class), any(ListTablesRequest.class));
+        logger.info("doListTables - exit");
     }
 
     @Test
     public void doGetTable()
             throws Exception
     {
+        logger.info("doGetTable - enter");
         GetTableRequest req = mock(GetTableRequest.class);
         when(req.getRequestType()).thenReturn(MetadataRequestType.GET_TABLE);
         compositeHandler.handleRequest(allocator, req, new ByteArrayOutputStream(), objectMapper);
         verify(mockMetadataHandler, times(1)).doGetTable(any(BlockAllocatorImpl.class), any(GetTableRequest.class));
+        logger.info("doGetTable - exit");
     }
 
     @Test
     public void doGetTableLayout()
             throws Exception
     {
+        logger.info("doGetTableLayout - enter");
         GetTableLayoutRequest req = mock(GetTableLayoutRequest.class);
         when(req.getRequestType()).thenReturn(MetadataRequestType.GET_TABLE_LAYOUT);
         compositeHandler.handleRequest(allocator, req, new ByteArrayOutputStream(), objectMapper);
         verify(mockMetadataHandler, times(1)).doGetTableLayout(any(BlockAllocatorImpl.class), any(GetTableLayoutRequest.class));
+        logger.info("doGetTableLayout - exit");
     }
 
     @Test
     public void doGetSplits()
             throws Exception
     {
+        logger.info("doGetSplits - enter");
         GetSplitsRequest req = mock(GetSplitsRequest.class);
         when(req.getRequestType()).thenReturn(MetadataRequestType.GET_SPLITS);
         compositeHandler.handleRequest(allocator, req, new ByteArrayOutputStream(), objectMapper);
         verify(mockMetadataHandler, times(1)).doGetSplits(any(BlockAllocatorImpl.class), any(GetSplitsRequest.class));
+        logger.info("doGetSplits - exit");
     }
 
     @Test
     public void doPing()
             throws Exception
     {
+        logger.info("doPing - enter");
         PingRequest req = mock(PingRequest.class);
         when(req.getCatalogName()).thenReturn("catalog");
         when(req.getQueryId()).thenReturn("queryId");
         compositeHandler.handleRequest(allocator, req, new ByteArrayOutputStream(), objectMapper);
         verify(mockMetadataHandler, times(1)).doPing(any(PingRequest.class));
+        logger.info("doPing - exit");
     }
 }
